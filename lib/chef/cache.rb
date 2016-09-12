@@ -98,8 +98,12 @@ class Chef
 
     def mirror_package(uri)
       # TODO: return if file exists with good checksum
+      path = "./packages#{URI(uri).path}"
+      dir = File.dirname(path)
+      FileUtils.mkdir_p(dir) unless File.exists?(dir)
+
       puts "Downloading #{uri}"
-      IO.copy_stream(open(uri), "./packages/#{URI(uri).path}")
+      IO.copy_stream(open(uri), path)
     end
 
     #
