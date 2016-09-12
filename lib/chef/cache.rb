@@ -17,6 +17,7 @@
 require "fileutils"
 require "chef/project_manifest"
 require "mixlib/install/product"
+require "open-uri"
 
 class Chef
   class Cache
@@ -64,15 +65,41 @@ class Chef
     #
     def update
       KNOWN_PROJECTS.each do |project|
+        next unless project == 'chef'
         KNOWN_CHANNELS.each do |channel|
+          next unless channel == 'stable'
           manifest = ProjectManifest.new(project, channel)
           manifest.generate
 
+          #if settings.mirror
+            downloads = []
+            manifest.manifest.each do |foo, platform|
+              platform.each do |foo, version|
+                version.each do |foo, arch|
+                  arch.each do |foo, pkg|
+                    downloads.push(pkg)
+                  end
+                end
+              end
+            end
+
+            downloads.each do |d|
+              mirror_package(d[:url])
+            end
+          #end
+
           File.open(project_manifest_path(project, channel), "w") do |f|
+            # TODO: replace urls if settings.mirror
             f.puts manifest.serialize
           end
         end
       end
+    end
+
+    def mirror_package(uri)
+      # TODO: return if file exists with good checksum
+      puts "Downloading #{uri}"
+      IO.copy_stream(open(uri), "./packages/#{URI(uri).path}")
     end
 
     #
