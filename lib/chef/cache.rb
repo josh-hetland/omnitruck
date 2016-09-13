@@ -23,6 +23,7 @@ class Chef
   class Cache
     class MissingManifestFile < StandardError; end
 
+    # TODO: whitelist of projects and channels
     KNOWN_PROJECTS = PRODUCT_MATRIX.products
 
     KNOWN_CHANNELS = %w(
@@ -73,11 +74,19 @@ class Chef
 
           #if settings.mirror
             packages = []
-            manifest.manifest.each do |foo, platform|
-              platform.each do |foo, version|
-                version.each do |foo, arch|
-                  arch.each do |foo, pkg|
-                    packages.push(pkg)
+            manifest.manifest.each do |platform_name, platform|
+              platform.each do |version_name, version|
+                version.each do |arch_name, arch|
+                  arch.each do |pkg_name, pkg|
+                    packages.push(pkg.dup)
+
+                    # Change URI to local
+                    # TODO: specify this in settings
+                    download_uri = URI(manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url])
+                    download_uri.scheme = 'http'
+                    download_uri.host = 'localhost'
+                    download_uri.port = 9393
+                    manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url] = download_uri.to_s
                   end
                 end
               end
@@ -89,7 +98,6 @@ class Chef
           #end
 
           File.open(project_manifest_path(project, channel), "w") do |f|
-            # TODO: replace urls if settings.mirror
             f.puts manifest.serialize
           end
         end
