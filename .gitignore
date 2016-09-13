@@ -27,3 +27,6 @@ server_migrate_manifest_names
 
 # Ignore dev files
 metadata_dir/
+
+# Ignore mirrored packages
+public/
