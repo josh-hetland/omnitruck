@@ -78,7 +78,7 @@ class Chef
               platform.each do |version_name, version|
                 version.each do |arch_name, arch|
                   arch.each do |pkg_name, pkg|
-                    packages.push(pkg.dup)
+                    packages.push(pkg.dup) if pkg_name.start_with?('12.13')
 
                     # Change URI to local
                     # TODO: specify this in settings
