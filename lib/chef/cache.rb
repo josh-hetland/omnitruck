@@ -72,19 +72,19 @@ class Chef
           manifest.generate
 
           #if settings.mirror
-            downloads = []
+            packages = []
             manifest.manifest.each do |foo, platform|
               platform.each do |foo, version|
                 version.each do |foo, arch|
                   arch.each do |foo, pkg|
-                    downloads.push(pkg)
+                    packages.push(pkg)
                   end
                 end
               end
             end
 
-            downloads.each do |d|
-              mirror_package(d[:url])
+            packages.each do |pkg|
+              mirror_package(pkg)
             end
           #end
 
@@ -96,14 +96,18 @@ class Chef
       end
     end
 
-    def mirror_package(uri)
-      # TODO: return if file exists with good checksum
-      path = "./packages#{URI(uri).path}"
-      dir = File.dirname(path)
-      FileUtils.mkdir_p(dir) unless File.exists?(dir)
+    def mirror_package(pkg)
+      cache_path = "./packages#{URI(pkg[:url]).path}"
+      if File.exists?(cache_path) && Digest::SHA256.hexdigest(File.read(cache_path)) == pkg[:sha256]
+        puts "#{URI(pkg[:url]).path} is already in cache"
+      else
+        puts "Downloading #{pkg[:url]}"
 
-      puts "Downloading #{uri}"
-      IO.copy_stream(open(uri), path)
+        dir = File.dirname(cache_path)
+        FileUtils.mkdir_p(dir) unless File.exists?(dir)
+
+        IO.copy_stream(open(pkg[:url]), cache_path)
+      end
     end
 
     #
