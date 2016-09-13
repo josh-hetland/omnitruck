@@ -23,7 +23,7 @@ class Chef
   class Cache
     class MissingManifestFile < StandardError; end
 
-    # TODO: whitelist of projects and channels
+    # TODO: whitelist of projects and channels - look at project_allowed in src
     KNOWN_PROJECTS = PRODUCT_MATRIX.products
 
     KNOWN_CHANNELS = %w(
@@ -105,7 +105,7 @@ class Chef
     end
 
     def mirror_package(pkg)
-      cache_path = "./packages#{URI(pkg[:url]).path}"
+      cache_path = "./public#{URI(pkg[:url]).path}"
       if File.exists?(cache_path) && Digest::SHA256.hexdigest(File.read(cache_path)) == pkg[:sha256]
         puts "#{URI(pkg[:url]).path} is already in cache"
       else
