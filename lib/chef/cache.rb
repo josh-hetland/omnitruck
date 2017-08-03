@@ -78,14 +78,15 @@ class Chef
               platform.each do |version_name, version|
                 version.each do |arch_name, arch|
                   arch.each do |pkg_name, pkg|
-                    packages.push(pkg.dup) if pkg_name.start_with?('12.13')
+                    #packages.push(pkg.dup) if pkg_name.start_with?('12.13')
+                    packages.push(pkg.dup) if Gem::Version.new(pkg_name) > Gem::Version.new('12.13')
 
                     # Change URI to local
                     # TODO: specify this in settings
                     download_uri = URI(manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url])
                     download_uri.scheme = 'http'
-                    download_uri.host = 'localhost'
-                    download_uri.port = 9393
+                    download_uri.host = '172.31.207.211'
+                    download_uri.port = 80
                     manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url] = download_uri.to_s
                   end
                 end
