@@ -1,0 +1,20 @@
+#####################################################
+#
+# Unicorn process service for running the omnitruck Server
+#
+####################################################
+
+[Unit]
+Description=Omnitruck Unicorn Server
+
+[Service]
+User=root
+WorkingDirectory=/var/rails/omnitruck
+Environment=RAILS_ENV=production
+SyslogIdentifier=omnitruck-unicorn
+PIDFile=/var/rails/omnitruck/shared/pids/unicorn.pid
+
+ExecStart=/usr/bin/scl enable rh-ruby24 nodejs010 -- /opt/rh/rh-ruby24/root/usr/local/bin/bundle exec "unicorn -D -c /var/rails/omnitruck/config/unicorn.rb -E production"
+
+[Install]
+WantedBy=multi-user.target
