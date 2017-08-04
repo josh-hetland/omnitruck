@@ -1,6 +1,6 @@
-include_recipe 'chef-sugar::default'
+return if (workflow_stage?('union') || workflow_stage?('rehearsal'))
 
-load_delivery_chef_config
+include_recipe 'chef-sugar::default'
 
 site_name = 'omnitruck'
 domain_name = 'chef.io'

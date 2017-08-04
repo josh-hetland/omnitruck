@@ -9,7 +9,7 @@ gem 'yajl-ruby'
 gem "rest-client"
 gem 'rake'
 gem 'mixlib-versioning', '~> 1.1.0'
-gem 'mixlib-install', :git => 'https://github.com/chef/mixlib-install.git', :branch => 'master'
+gem 'mixlib-install', '~> 3.1'
 gem 'trashed'
 
 group :test do
@@ -19,6 +19,8 @@ group :test do
   gem 'rspec-its'
   gem 'rack-test'
   gem 'rspec_junit_formatter'
+  gem 'pry-byebug'
+  gem 'rb-readline'
 end
 
 group :security do

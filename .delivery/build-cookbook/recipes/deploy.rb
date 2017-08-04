@@ -1,10 +1,12 @@
+return if (workflow_stage?('union') || workflow_stage?('rehearsal'))
+
 include_recipe 'chef-sugar::default'
 
-ENV['AWS_CONFIG_FILE'] = File.join(node['delivery']['workspace']['root'], 'aws_config')
-load_delivery_chef_config
-fastly_creds = encrypted_data_bag_item_for_environment('cia-creds','fastly')
+fastly_creds = with_server_config { encrypted_data_bag_item_for_environment('cia-creds','fastly') }
 
-ssh = encrypted_data_bag_item_for_environment('cia-creds', 'aws-ssh')
+ENV['AWS_CONFIG_FILE'] = File.join(node['delivery']['workspace']['root'], 'aws_config')
+
+ssh = with_server_config { encrypted_data_bag_item_for_environment('cia-creds', 'aws-ssh') }
 ssh_private_key_path =  File.join(node['delivery']['workspace']['cache'], '.ssh', node['delivery']['change']['project'])
 ssh_public_key_path =  File.join(node['delivery']['workspace']['cache'], '.ssh', "#{node['delivery']['change']['project']}.pub")
 
@@ -12,12 +14,8 @@ require 'chef/provisioning/aws_driver'
 require 'pp'
 with_driver 'aws::us-west-2'
 
-with_chef_server Chef::Config[:chef_server_url],
-  client_name: Chef::Config[:node_name],
-  signing_key_filename: Chef::Config[:client_key],
-  trusted_certs_dir: '/var/opt/delivery/workspace/etc/trusted_certs',
-  ssl_verify_mode: :verify_none,
-  verify_api_cert: false
+with_chef_server chef_server_details[:chef_server_url],
+                 chef_server_details[:options]
 
 if node['delivery']['change']['stage'] == 'delivered'
   instance_name = node['delivery']['change']['project'].gsub(/_/, '-')
@@ -45,22 +43,36 @@ end
 domain_name = 'chef.io'
 fqdn = "#{instance_name}.#{domain_name}"
 
-machine_batch do
-  1.upto(instance_quantity) do |i|
-    machine "#{instance_name}-#{i}" do
-      action :converge
-      chef_environment delivery_environment
-      attribute 'delivery_org', node['delivery']['change']['organization']
-      attribute 'project', node['delivery']['change']['project']
-      # Enable unified_backend feature flag in the acceptance stage
-      # See `attribute` property documentation at https://docs.chef.io/resource_machine.html
-      # for an explanation on why we are using %w{ } here...
-      attribute %w{omnitruck unified_backend}, true if node['delivery']['change']['stage'] == 'acceptance'
-      tags node['delivery']['change']['organization'], node['delivery']['change']['project']
-      machine_options CIAInfra.machine_options(node, 'us-west-2')
-      files '/etc/chef/encrypted_data_bag_secret' => '/etc/chef/encrypted_data_bag_secret'
-      run_list ['recipe[apt::default]', 'recipe[cia_infra::base]', 'recipe[omnitruck::default]']
-      converge true
+# For new instances we need to install build-essential in a separate run_list.
+# * cia_infra cookbook installs chef-provisioning-aws gem
+# -> chef-provisioning-aws gem constrains json to 1.8.6
+# -> CCRs on omnitruck instances try to install all gems before executing run list
+# -> build-essential tools must be installed on instances to make/install json 1.8.6 natively
+# -> build-essential tools can't be installed as part of same CCR because of ^^^^
+# In short, this gets around the issue where build-essential was installed
+# manually on omnitruck instances for all environments.
+run_lists = [
+  ['recipe[apt::default]', 'recipe[build-essential::default]'],
+  ['recipe[cia_infra::base]', 'recipe[omnitruck::default]'],
+]
+
+# Instances using latest omnitruck habitat packages
+# Prepend instance number with a "0" to force creation of new instances
+run_lists.each do |r_list|
+  machine_batch do
+    1.upto(instance_quantity) do |i|
+      machine "#{instance_name}-0#{i}" do
+        chef_server chef_server_details
+        chef_environment delivery_environment
+        attribute 'delivery_org', workflow_change_organization
+        attribute 'project', workflow_change_project
+        tags "#{workflow_change_organization}", "#{workflow_change_project}"
+        machine_options machine_opts(i)
+        files '/etc/chef/encrypted_data_bag_secret' => '/etc/chef/encrypted_data_bag_secret'
+        run_list r_list
+        converge true
+        action :converge
+      end
     end
   end
 end

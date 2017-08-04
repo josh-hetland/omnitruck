@@ -1,28 +1,23 @@
 include_recipe 'chef-sugar::default'
 include_recipe 'delivery-truck::provision'
 
-load_delivery_chef_config
+# Return after 'delivery-truck::provision' recipe converges
+return if (workflow_stage?('union') || workflow_stage?('rehearsal'))
 
-aws_creds = encrypted_data_bag_item_for_environment('cia-creds','chef-secure')
-fastly_creds = encrypted_data_bag_item_for_environment('cia-creds','fastly')
+aws_creds = with_server_config { encrypted_data_bag_item_for_environment('cia-creds','chef-secure') }
+fastly_creds = with_server_config { encrypted_data_bag_item_for_environment('cia-creds','fastly') }
 
 ENV['AWS_CONFIG_FILE'] = File.join(node['delivery']['workspace']['root'], 'aws_config')
 
-ssh = encrypted_data_bag_item_for_environment('cia-creds', 'aws-ssh')
+ssh = with_server_config { encrypted_data_bag_item_for_environment('cia-creds', 'aws-ssh') }
 ssh_private_key_path =  File.join(node['delivery']['workspace']['cache'], '.ssh', node['delivery']['change']['project'])
 ssh_public_key_path =  File.join(node['delivery']['workspace']['cache'], '.ssh', "#{node['delivery']['change']['project']}.pub")
 
 require 'chef/provisioning/aws_driver'
-require 'pp'
 with_driver 'aws::us-west-2'
 
-with_chef_server Chef::Config[:chef_server_url],
-  client_name: Chef::Config[:node_name],
-  signing_key_filename: Chef::Config[:client_key],
-  trusted_certs_dir: '/var/opt/delivery/workspace/etc/trusted_certs',
-  ssl_verify_mode: :verify_none,
-  verify_api_cert: false
-
+with_chef_server chef_server_details[:chef_server_url],
+                 chef_server_details[:options]
 
 if node['delivery']['change']['stage'] == 'delivered'
   instance_name = node['delivery']['change']['project'].gsub(/_/, '-')
@@ -60,66 +55,68 @@ direct_fqdn = "#{instance_name}-direct.#{domain_name}"
 subnets = []
 instances = []
 
-machine_batch do
-  1.upto(instance_quantity) do |i|
-    machine "#{instance_name}-#{i}" do
-      action :setup
-      chef_environment delivery_environment
-      attribute 'delivery_org', node['delivery']['change']['organization']
-      attribute 'project', node['delivery']['change']['project']
-      tags node['delivery']['change']['organization'], node['delivery']['change']['project']
-      machine_options CIAInfra.machine_options(node, 'us-west-2', i)
-      files '/etc/chef/encrypted_data_bag_secret' => '/etc/chef/encrypted_data_bag_secret'
-      converge false
-    end
-
-    subnets << CIAInfra.subnet_id(node, CIAInfra.availability_zone('us-west-2', i))
-    instances << "#{instance_name}-#{i}"
+# Instances using latest omnitruck habitat packages
+# Prepended instance number with a "0" to force creation of new instances
+1.upto(instance_quantity) do |i|
+  machine "#{instance_name}-0#{i}" do
+    chef_server chef_server_details
+    chef_environment delivery_environment
+    attribute 'delivery_org', workflow_change_organization
+    attribute 'project', workflow_change_project
+    tags "#{workflow_change_organization}", "#{workflow_change_project}"
+    machine_options machine_opts(i)
+    files '/etc/chef/encrypted_data_bag_secret' => '/etc/chef/encrypted_data_bag_secret'
+    converge false
+    action :setup
   end
+
+  subnets << CIAInfra.subnet_id(node, CIAInfra.availability_zone('us-west-2', i))
+  instances << "#{instance_name}-#{i}"
 end
 
-load_balancer "#{instance_name}-elb" do
-  load_balancer_options \
-    listeners: [{
-      port: 80,
-      protocol: :http,
-      instance_port: 80,
-      instance_protocol: :http
-    },
-    {
-      port: 443,
-      protocol: :https,
-      instance_port: 80,
-      instance_protocol: :http,
-      server_certificate: CIAInfra.cert_arn
-    }],
-    subnets: subnets,
-    security_groups: CIAInfra.security_groups(node, 'us-west-2'),
-    scheme: 'internet-facing'
-  machines instances
-end
-
-client = AWS::ELB.new(region: 'us-west-2')
-
-route53_record origin_fqdn do
-  name "#{origin_fqdn}."
-  value lazy { client.load_balancers["#{instance_name}-elb"].dns_name }
-  aws_access_key_id aws_creds['access_key_id']
-  aws_secret_access_key aws_creds['secret_access_key']
-  type 'CNAME'
-  zone_id aws_creds['route53'][domain_name]
-  sensitive true
-end
-
-route53_record direct_fqdn do
-  name "#{direct_fqdn}."
-  value lazy { client.load_balancers["#{instance_name}-elb"].dns_name }
-  aws_access_key_id aws_creds['access_key_id']
-  aws_secret_access_key aws_creds['secret_access_key']
-  type 'CNAME'
-  zone_id aws_creds['route53'][domain_name]
-  sensitive true
-end
+#load_balancer "#{instance_name}-elb" do
+#  load_balancer_options \
+#    chef_server chef_server_details
+#    listeners: [{
+#      port: 80,
+#      protocol: :http,
+#      instance_port: 80,
+#      instance_protocol: :http
+#    },
+#    {
+#      port: 443,
+#      protocol: :https,
+#      instance_port: 80,
+#      instance_protocol: :http,
+#      server_certificate: CIAInfra.cert_arn
+#    }],
+#    subnets: subnets,
+#    security_groups: CIAInfra.security_groups(node, 'us-west-2'),
+#    scheme: 'internet-facing'
+#  machines instances
+#end
+#
+#client = AWS::ELB.new(region: 'us-west-2')
+#
+#route53_record origin_fqdn do
+#  name "#{origin_fqdn}."
+#  value lazy { client.load_balancers["#{instance_name}-elb"].dns_name }
+#  aws_access_key_id aws_creds['access_key_id']
+#  aws_secret_access_key aws_creds['secret_access_key']
+#  type 'CNAME'
+#  zone_id aws_creds['route53'][domain_name]
+#  sensitive true
+#end
+#
+#route53_record direct_fqdn do
+#  name "#{direct_fqdn}."
+#  value lazy { client.load_balancers["#{instance_name}-elb"].dns_name }
+#  aws_access_key_id aws_creds['access_key_id']
+#  aws_secret_access_key aws_creds['secret_access_key']
+#  type 'CNAME'
+#  zone_id aws_creds['route53'][domain_name]
+#  sensitive true
+#end
 
 ### Fastly Setup
 fastly_service = fastly_service fqdn do

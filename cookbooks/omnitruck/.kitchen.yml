@@ -6,7 +6,7 @@ provisioner:
   name: chef_zero
 
 platforms:
-  - name: ubuntu-14.04
+  - name: ubuntu-16.04
 
 suites:
   - name: default
@@ -15,4 +15,4 @@ suites:
       - recipe[omnitruck::default]
     attributes:
       applications:
-        omnitruck: 2015-09-19_1623
+        omnitruck: 873/20170420131452

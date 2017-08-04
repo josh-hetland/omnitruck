@@ -86,18 +86,11 @@ end
 
 platform "suse" do
   major_only true
-  remap "el"
-  version_remap do |version|
-    version.to_f <= 11 ? "5" : "6"
-  end
+  remap "sles"
 end
 
 platform "sles" do
   major_only true
-  remap "el"
-  version_remap do |version|
-    version.to_f <= 10 ? "5" : "6"
-  end
 end
 
 platform "amazon" do
@@ -126,9 +119,9 @@ end
 
 platform "linuxmint" do
   remap "ubuntu"
-  version_remap do |version|
-    minor_rev = ( version.to_i % 2 == 0 ) ? "10" : "04"
-    major_rev = ( (version.to_i + 11) / 2 ).floor.to_s
+  version_remap do |opts|
+    minor_rev = ( opts[:version].to_i % 2 == 0 ) ? "10" : "04"
+    major_rev = ( (opts[:version].to_i + 11) / 2 ).floor.to_s
     "#{major_rev}.#{minor_rev}"
   end
 end
@@ -145,8 +138,21 @@ platform "raspbian" do
   remap "debian"
 end
 
-# see #81
-platform "cumulus networks" do
+platform "arista_eos" do
+  major_only true
+  remap "el"
+  version_remap 6
+end
+
+# cumulus linux 3.0.0 and later is debian 8
+platform "cumulus_linux" do
+  remap "debian"
+  version_remap do |opts|
+    (opts[:version].split('.')[0].to_i >= 3) ? "8" : "7"
+  end
+end
+
+platform "cumulus_networks" do
   remap "debian"
   version_remap 7
 end

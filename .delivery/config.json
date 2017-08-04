@@ -5,12 +5,21 @@
       "path": ".delivery/build-cookbook"
   },
   "skip_phases": [
-    "quality"
+    "quality",
+    "security"
   ],
+  "job_dispatch": {
+    "version": "v2",
+    "filters": {
+      "default": {
+        "platform": ["ubuntu"],
+        "platform_version": ["16.04"]
+      }
+    }
+  },
   "delivery-truck": {
     "publish": {
-      "chef_server": true,
-      "github": "chef/omnitruck"
+      "chef_server": true
     }
   }
 }

@@ -30,3 +30,10 @@ metadata_dir/
 
 # Ignore mirrored packages
 public/
+# Ignore habitat builds
+results/
+
+# test kitchen
+.kitchen
+
+.delivery/cli.toml
