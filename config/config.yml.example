@@ -1,4 +1,16 @@
 development:
   virtual_path: ''
   metadata_dir: './metadata_dir'
-
+  package_protocol: 'http'
+  package_host: '172.31.207.211'
+  package_port: 80
+  package_dir: './public'
+  sync_min_version: '12.13'
+production:
+  virtual_path: ''
+  metadata_dir: './metadata_dir'
+  package_protocol: 'http'
+  package_host: '172.31.207.211'
+  package_port: 80
+  package_dir: './public'
+  sync_min_version: '12.13'

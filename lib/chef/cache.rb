@@ -33,6 +33,11 @@ class Chef
     )
 
     attr_reader :metadata_dir
+    attr_reader :sync_min_version
+    attr_reader :package_host
+    attr_reader :package_protocol
+    attr_reader :package_port
+    attr_reader :package_dir
 
     #
     # Initializer for the cache.
@@ -40,8 +45,20 @@ class Chef
     # @param [String] metadata_dir
     #   the directory which will be used to create files in & read files from.
     #
-    def initialize(metadata_dir = "./metadata_dir")
-      @metadata_dir = metadata_dir
+    def initialize(config = {})
+      if config.is_a?(String)
+        @metadata_dir = config
+      else
+        @metadata_dir = config.respond_to?(:metadata_dir) ? config[:metadata_dir] : './metadata_dir'
+      end
+      # If this remains nil it will suck in everything
+      @sync_min_version = config.respond_to?(:sync_min_version) ? config[:sync_min_version] : nil
+      # If this remains nil it will pass the original manifest location through
+      @package_host = config.respond_to?(:package_host) ? config[:package_host] : nil
+      # Neither of these will matter if the first one is nil
+      @package_protocol = config.respond_to?(:package_protocol) ? config[:package_protocol] : 'http'
+      @package_port = config.respond_to?(:package_port) ? config[:package_port] : 80
+      @package_dir = config.respond_to?(:package_dir) ? config[:package_dir] : './public'
 
       KNOWN_CHANNELS.each do |channel|
         FileUtils.mkdir_p(File.join(metadata_dir, channel))
@@ -61,31 +78,34 @@ class Chef
           manifest = ProjectManifest.new(project, channel)
           manifest.generate
 
-          #if settings.mirror
-            packages = []
-            manifest.manifest.each do |platform_name, platform|
-              platform.each do |version_name, version|
-                version.each do |arch_name, arch|
-                  arch.each do |pkg_name, pkg|
-                    #packages.push(pkg.dup) if pkg_name.start_with?('12.13')
-                    packages.push(pkg.dup) if Gem::Version.new(pkg_name) > Gem::Version.new('12.13')
-
-                    # Change URI to local
-                    # TODO: specify this in settings
-                    download_uri = URI(manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url])
-                    download_uri.scheme = 'http'
-                    download_uri.host = '172.31.207.211'
-                    download_uri.port = 80
-                    manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url] = download_uri.to_s
+          packages = []
+          manifest.manifest.each do |platform_name, platform|
+            platform.each do |version_name, version|
+              version.each do |arch_name, arch|
+                arch.each do |pkg_name, pkg|
+                  if sync_min_version.nil?
+                    packages.push(pkg.dup)
+                  else
+                    packages.push(pkg.dup) if Gem::Version.new(pkg_name) > Gem::Version.new(sync_min_version)
                   end
+
+                  # Change URI to local
+                  download_uri = URI(manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url])
+
+                  if ! package_host.nil?
+                    download_uri.scheme = package_protocol
+                    download_uri.host = package_host
+                    download_uri.port = package_port
+                  end
+                  manifest.manifest[platform_name][version_name][arch_name][pkg_name][:url] = download_uri.to_s
                 end
               end
             end
+          end
 
-            packages.each do |pkg|
-              mirror_package(pkg)
-            end
-          #end
+          packages.each do |pkg|
+            mirror_package(pkg)
+          end
 
           File.open(project_manifest_path(project, channel), "w") do |f|
             f.puts manifest.serialize
@@ -95,7 +115,7 @@ class Chef
     end
 
     def mirror_package(pkg)
-      cache_path = "./public#{URI(pkg[:url]).path}"
+      cache_path = "#{package_dir}#{URI(pkg[:url]).path}"
       if File.exists?(cache_path) && Digest::SHA256.hexdigest(File.read(cache_path)) == pkg[:sha256]
         puts "#{URI(pkg[:url]).path} is already in cache"
       else
