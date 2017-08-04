@@ -48,17 +48,22 @@ class Chef
     def initialize(config = {})
       if config.is_a?(String)
         @metadata_dir = config
+        @sync_min_version = nil
+        @package_host = nil
+        @package_protocol = nil
+        @package_port = nil
+        @package_dir = './public'
       else
         @metadata_dir = config.key?('metadata_dir') ? config['metadata_dir'] : './metadata_dir'
+         # If this remains nil it will suck in everything
+        @sync_min_version = config.key?('sync_min_version') ? config['sync_min_version'] : nil
+        # If this remains nil it will pass the original manifest location through
+        @package_host = config.key?('package_host') ? config['package_host'] : nil
+        # Neither of these will matter if the first one is nil
+        @package_protocol = config.key?('package_protocol') ? config['package_protocol'] : 'http'
+        @package_port = config.key?('package_port') ? config['package_port'] : 80
+        @package_dir = config.key?('package_dir') ? config['package_dir'] : './public'
       end
-      # If this remains nil it will suck in everything
-      @sync_min_version = config.key?('sync_min_version') ? config['sync_min_version'] : nil
-      # If this remains nil it will pass the original manifest location through
-      @package_host = config.key?('package_host') ? config['package_host'] : nil
-      # Neither of these will matter if the first one is nil
-      @package_protocol = config.key?('package_protocol') ? config['package_protocol'] : 'http'
-      @package_port = config.key?('package_port') ? config['package_port'] : 80
-      @package_dir = config.key?('package_dir') ? config['package_dir'] : './public'
 
       KNOWN_CHANNELS.each do |channel|
         FileUtils.mkdir_p(File.join(metadata_dir, channel))
